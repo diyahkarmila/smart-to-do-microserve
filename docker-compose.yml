@@ -1,0 +1,206 @@
+﻿services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [todo-net]
+
+  auth-service:
+    build: ./services/auth-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      DATABASE_URL: postgres://todo:todo@auth-db:5432/authdb
+    depends_on: [auth-db]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=PathPrefix(`/auth`) || Path(`/health-auth`)
+      - traefik.http.routers.auth.entrypoints=web
+      - traefik.http.services.auth.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  task-service:
+    build: ./services/task-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      DATABASE_URL: postgres://todo:todo@task-db:5432/taskdb
+      REDIS_URL: redis://redis:6379
+      CATEGORY_SERVICE_URL: http://category-service:3000
+    depends_on: [task-db, redis, category-service]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.tasks.rule=PathPrefix(`/tasks`)
+      - traefik.http.routers.tasks.entrypoints=web
+      - traefik.http.services.tasks.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  category-service:
+    build: ./services/category-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      DATABASE_URL: postgres://todo:todo@category-db:5432/categorydb
+    depends_on: [category-db]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.categories.rule=PathPrefix(`/categories`)
+      - traefik.http.routers.categories.entrypoints=web
+      - traefik.http.services.categories.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  notification-service:
+    build: ./services/notification-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      DATABASE_URL: postgres://todo:todo@notification-db:5432/notificationdb
+      REDIS_URL: redis://redis:6379
+    depends_on: [notification-db, redis]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.notifications.rule=PathPrefix(`/notifications`)
+      - traefik.http.routers.notifications.entrypoints=web
+      - traefik.http.services.notifications.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  realtime-service:
+    build: ./services/realtime-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      REDIS_URL: redis://redis:6379
+    depends_on: [redis]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.realtime.rule=PathPrefix(`/realtime`) || PathPrefix(`/ws`)
+      - traefik.http.routers.realtime.entrypoints=web
+      - traefik.http.services.realtime.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  analytics-service:
+    build: ./services/analytics-service
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-smart-todo-super-secret}
+      TASK_SERVICE_URL: http://task-service:3000
+      NOTIFICATION_SERVICE_URL: http://notification-service:3000
+    depends_on: [task-service, notification-service]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.analytics.rule=PathPrefix(`/analytics`)
+      - traefik.http.routers.analytics.entrypoints=web
+      - traefik.http.services.analytics.loadbalancer.server.port=3000
+    networks: [todo-net]
+
+  auth-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: authdb
+    volumes: [auth-db-data:/var/lib/postgresql/data]
+    networks: [todo-net]
+
+  task-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: taskdb
+    volumes: [task-db-data:/var/lib/postgresql/data]
+    networks: [todo-net]
+
+  category-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: categorydb
+    volumes: [category-db-data:/var/lib/postgresql/data]
+    networks: [todo-net]
+
+  notification-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: notificationdb
+    volumes: [notification-db-data:/var/lib/postgresql/data]
+    networks: [todo-net]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redis-data:/data]
+    networks: [todo-net]
+
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on: [auth-service, task-service, category-service, notification-service, realtime-service, analytics-service, node-exporter, cadvisor]
+    networks: [todo-net]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on: [prometheus]
+    networks: [todo-net]
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    command:
+      - --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    networks: [todo-net]
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks: [todo-net]
+
+networks:
+  todo-net:
+    driver: bridge
+
+volumes:
+  auth-db-data:
+  task-db-data:
+  category-db-data:
+  notification-db-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:

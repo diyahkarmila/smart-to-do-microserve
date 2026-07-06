@@ -1,0 +1,11 @@
+﻿apiVersion: 1
+
+providers:
+  - name: Smart Todo Dashboards
+    orgId: 1
+    folder: Smart Todo
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

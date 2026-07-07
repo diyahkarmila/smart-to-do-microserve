@@ -1,0 +1,103 @@
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #111827;
+  background: #f8fafc;
+}
+body, html, #root {
+  margin: 0;
+  min-height: 100%;
+}
+.container {
+  max-width: 960px;
+  margin: 36px auto;
+  padding: 0 16px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+button.logout {
+  background: #ef4444;
+}
+.auth-card, .panel {
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.toggle button {
+  background: #e2e8f0;
+  color: #111827;
+}
+.toggle button.active {
+  background: #2563eb;
+  color: white;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+input, select {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #d1d5db;
+  font-size: 1rem;
+}
+.list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.list-item {
+  padding: 14px 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.task-item {
+  flex-direction: column;
+  align-items: flex-start;
+}
+.dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+.message {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 14px;
+}
+section {
+  display: grid;
+  gap: 24px;
+}
+@media (min-width: 900px) {
+  section {
+    grid-template-columns: 1fr 1.2fr;
+  }
+}
